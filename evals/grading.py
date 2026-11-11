@@ -1,6 +1,5 @@
 """Chấm 0–100: rubric LLM judge + một số kiểm tra trace bằng code."""
 import json
-from providers import safe_error_details
 
 DIMENSIONS = {'factuality': 40, 'completeness': 25, 'evidence': 20, 'boundaries': 15}
 JUDGE_INSTRUCTIONS = '''Bạn là giám khảo độc lập. Chấm câu trả lời agent theo question, expected và trace được cung cấp.
@@ -75,8 +74,7 @@ def grade_case(case, result, judge):
                 'status': 'scored', 'reason': grading['reason'], 'improvement': grading['improvement'],
                 'mechanical': checks, 'judge_usage': reply.get('usage', {}), 'judge_trace_truncated': data['trace_truncated']}
     except (ValueError, KeyError, TypeError, RuntimeError, OSError, TimeoutError, IndexError, AttributeError) as exc:
-        return {'score': None, 'status': 'unscored', 'reason': 'Judge failed.',
-                'diagnostics': safe_error_details(exc), 'mechanical': checks, 'judge_usage': {}}
+        return {'score': None, 'status': 'unscored', 'reason': f'Judge lỗi: {str(exc)[:200]}', 'mechanical': checks, 'judge_usage': {}}
 
 
 def summarize(results):
