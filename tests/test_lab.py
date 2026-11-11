@@ -7,7 +7,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agent import run_agent
 from status_tools import StatusTools
-from providers import Provider
+from providers import Provider, post_json
 
 
 def tool_call(call_id, name, arguments):
@@ -80,6 +80,20 @@ class LoopTests(unittest.TestCase):
 
 
 class ProviderTests(unittest.TestCase):
+    @patch('providers.urllib.request.urlopen')
+    def test_post_json_default_headers_and_overrides(self, urlopen):
+        urlopen.return_value.__enter__.return_value.read.return_value = b'{"ok": true}'
+        defaults = {'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'ReactLoopAgent/1.0'}
+        overrides = {'Content-Type': 'application/custom+json', 'Accept': 'application/custom+json', 'User-Agent': 'CustomClient/1.0'}
+        for headers in ({}, overrides):
+            with self.subTest(headers=headers):
+                self.assertEqual(post_json('https://example.invalid/api', headers, {'message': 'test'}), {'ok': True})
+                request = urlopen.call_args.args[0]
+                for name, value in (headers or defaults).items():
+                    self.assertEqual(request.get_header(name.capitalize()), value)
+                self.assertEqual(json.loads(request.data), {'message': 'test'})
+                self.assertEqual(urlopen.call_args.kwargs, {'timeout': 60})
+
     @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test'})
     @patch('providers.post_json')
     def test_anthropic_groups_results(self, post):

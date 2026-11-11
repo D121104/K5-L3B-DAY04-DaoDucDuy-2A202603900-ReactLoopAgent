@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from agent import run_agent
-from providers import Provider
+from providers import Provider, safe_error_details
 from scenarios import ScenarioTools
 from grading import grade_case, summarize, bonus_points
 from bonus.tools import BonusTools
@@ -18,14 +18,16 @@ def run_case(case, args):
         result = run_agent(case['question'], Provider(args.provider, args.model),
                            (BonusTools('snapshot', scenario=case.get('scenario', 'normal')) if getattr(args, 'bonus', False) else ScenarioTools(case.get('scenario', 'normal'), case.get('fail', False))), max_steps=args.max_steps)
     except Exception as exc:
-        result = {'status': 'error', 'answer': '', 'trace': [], 'usage': [], 'error': f'{type(exc).__name__}: {str(exc)[:200]}'}
+        result = {'status': 'error', 'answer': '', 'trace': [], 'usage': [],
+                  'error': 'PROVIDER_ERROR', 'diagnostics': safe_error_details(exc)}
     if not isinstance(result, dict) or not isinstance(result.get('trace', []), list):
         result = {'status': 'error', 'answer': '', 'trace': [], 'usage': [], 'error': 'run_agent trả kết quả không hợp lệ.'}
     try:
         judge = Provider(args.judge_provider, args.judge_model)
         grade = grade_case(case, result, judge)
     except Exception as exc:
-        grade = {'score': None, 'status': 'unscored', 'reason': str(exc), 'judge_usage': {}}
+        grade = {'score': None, 'status': 'unscored', 'reason': 'Judge setup failed.',
+                 'diagnostics': safe_error_details(exc), 'judge_usage': {}}
     return {'id': case['id'], 'question': case['question'], 'expected': case['expected'],
             'scenario': case.get('scenario', 'normal'), 'provider': args.provider, 'model': args.model,
             'judge_provider': args.judge_provider, 'judge_model': args.judge_model, 'result': result, 'grade': grade}
@@ -33,7 +35,7 @@ def run_case(case, args):
 
 def main():
     parser = argparse.ArgumentParser(description='Chạy agent và chấm eval 0–100')
-    choices = ['openai', 'gemini', 'anthropic', 'openrouter']
+    choices = ['openai', 'gemini', 'anthropic', 'openrouter', 'groq']
     parser.add_argument('--provider', choices=choices, default=os.getenv('PROVIDER', 'openai'))
     parser.add_argument('--model', default=os.getenv('MODEL'))
     parser.add_argument('--judge-provider', choices=choices, default=os.getenv('JUDGE_PROVIDER'))
